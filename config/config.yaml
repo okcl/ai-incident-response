@@ -1,0 +1,11 @@
+api:
+  twitter_bearer_token: ""
+  arcgis_username: ""
+  arcgis_password: ""
+
+data:
+  raw_data_path: "data/raw"
+  processed_data_path: "data/processed"
+
+models:
+  spacy_model: "en_core_web_lg"
