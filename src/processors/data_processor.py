@@ -1,6 +1,7 @@
 import os
 import json
 import spacy
+import re
 from arcgis.gis import GIS
 from arcgis.geocoding import geocode
 from dotenv import load_dotenv
@@ -42,7 +43,7 @@ class DataProcessor:
         doc = self.nlp(text)
         for ent in doc.ents:
             if ent.label_ in ["GPE", "LOC"]:  # Geopolitical Entity or Location
-                result = geocode(ent.text, max_locations=1, as_featureset=True, gis=self.gis)
+                result = geocode(ent.text, max_locations=1, as_featureset=True)
                 if result and result.sdf.shape[0] > 0:
                     geocoded = result.sdf.iloc[0]
                     return {
@@ -54,81 +55,22 @@ class DataProcessor:
 
     def identify_incident_type(self, text):
         """
-        Identify incident type based on keywords in text.
+        Identify incident type using spaCy Named Entity Recognition (NER).
         """
-        keywords = {
-            "flood": "flooding",
-            "heavy rain": "flooding",
-            "inundation": "flooding",
-            "waterlogging": "flooding",
-            "hurricane": "hurricane",
-            "typhoon": "hurricane",
-            "cyclone": "hurricane",
-            "tornado": "tornado",
-            "twister": "tornado",
-            "storm": "storm",
-            "thunderstorm": "storm",
-            "hailstorm": "storm",
-            "blizzard": "storm",
-            "snowstorm": "storm",
-            "drought": "drought",
-            "heatwave": "drought",
-            "wildfire": "wildfire",
-            "bushfire": "wildfire",
-            "forest fire": "wildfire",
-            "earthquake": "earthquake",
-            "seismic": "earthquake",
-            "quake": "earthquake",
-            "tsunami": "tsunami",
-            "tidal wave": "tsunami",
-            "volcano": "volcanic eruption",
-            "eruption": "volcanic eruption",
-            "lava": "volcanic eruption",
-            "ashfall": "volcanic eruption",
-            "landslide": "landslide",
-            "mudslide": "landslide",
-            "avalanche": "avalanche",
-            "collapse": "building collapse",
-            "building collapse": "building collapse",
-            "sinkhole": "sinkhole",
-            "pandemic": "pandemic",
-            "epidemic": "epidemic",
-            "disease outbreak": "epidemic",
-            "fire": "fire",
-            "explosion": "explosion",
-            "blast": "explosion",
-            "chemical spill": "hazardous material",
-            "gas leak": "hazardous material",
-            "radiation leak": "hazardous material",
-            "toxic release": "hazardous material",
-            "industrial accident": "industrial accident",
-            "train crash": "transportation accident",
-            "plane crash": "transportation accident",
-            "shipwreck": "transportation accident",
-            "road accident": "transportation accident",
-            "car crash": "transportation accident",
-            "vehicle collision": "transportation accident",
-            "traffic incident": "transportation accident",
-            "terrorist attack": "terrorism",
-            "bombing": "terrorism",
-            "shooting": "terrorism",
-            "hostage": "terrorism",
-            "cyberattack": "cyberattack",
-            "data breach": "cyberattack",
-            "phishing": "cyberattack",
-            "power outage": "infrastructure failure",
-            "blackout": "infrastructure failure",
-            "water shortage": "infrastructure failure",
-            "bridge collapse": "infrastructure failure",
-            "dam breach": "infrastructure failure",
-            "riot": "civil unrest",
-            "protest": "civil unrest",
-            "demonstration": "civil unrest",
-            "stampede": "civil unrest"
-        }
-        for keyword, incident_type in keywords.items():
+        doc = self.nlp(text)
+        incident_keywords = ["flood", "earthquake", "fire", "crash", "storm", "hurricane", "tornado"]
+
+        # Check for entities in the text
+        for ent in doc.ents:
+            if ent.label_ in ["EVENT", "DISASTER"]:  # Common labels for incidents
+                return ent.text.lower()
+
+        # Check for keywords in the text if no entity is detected
+        for keyword in incident_keywords:
             if keyword in text.lower():
-                return incident_type
+                return keyword
+
+        # Default fallback
         return "unknown"
 
     def process_data(self, input_file, output_file):
@@ -146,12 +88,18 @@ class DataProcessor:
             for entry in raw_data:
                 location_info = self.extract_location(entry.get("text", ""))
                 incident_type = self.identify_incident_type(entry.get("text", ""))
+                # Extract the original tweet's HTML address
+                original_tweet = re.search(r"https://t\.co/\S+", entry.get("text", ""))
+                original_tweet = original_tweet.group(0) if original_tweet else ""
+                # Remove HTML addresses from description
+                description = re.sub(r"https://t\.co/\S+", "", entry.get("text", "")).strip()
+
                 standardized_entry = {
                     "incident_type": incident_type,
                     "location": location_info,
-                    "date": entry.get("created_at", ""),
-                    "description": entry.get("text", ""),
-                    "original_text": entry.get("text", "")
+                    "date": entry.get("date", ""),  # Include the date from unprocessed data
+                    "description": description,  # Description without HTML addresses
+                    "original_tweet": original_tweet,  # Store only the HTML link
                 }
                 processed_data.append(standardized_entry)
 
