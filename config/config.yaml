@@ -1,7 +1,7 @@
 api:
-  twitter_bearer_token: "your_info_here"
-  arcgis_username: "your_info_here"
-  arcgis_password: "your_info_here"
+  twitter_bearer_token: ""
+  arcgis_username: ""
+  arcgis_password: ""
 
 data:
   raw_data_path: "data/raw"
